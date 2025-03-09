@@ -33,13 +33,13 @@ productRouter.get("/product/:id", async (req: Request, res: Response): Promise<v
 
 productRouter.post("/product", async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, price, description, image } = req.body;
-        if (!name || !price || !description) {
+        const { name, price, quantity, image } = req.body;
+        if (!name || !price || !quantity) {
             res.status(StatusCodes.BAD_REQUEST).json({ message: "All fields are required" });
             return;
         }
 
-        const product = await database.create({ name, price, description, image });
+        const product = await database.create({ name, price, quantity, image });
         res.status(StatusCodes.CREATED).json(product);
     } catch (error) {
         res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
@@ -48,8 +48,8 @@ productRouter.post("/product", async (req: Request, res: Response): Promise<void
 
 productRouter.put("/product/:id", async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, price, description, image } = req.body;
-        if (!name || !price || !description) {
+        const { name, price, quantity, image } = req.body;
+        if (!name || !price || !quantity) {
             res.status(StatusCodes.BAD_REQUEST).json({ message: "All fields are required" });
             return;
         }
