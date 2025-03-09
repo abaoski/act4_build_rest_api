@@ -1,132 +1,119 @@
-
-import express, {Request ,Response} from "express"
-import { UnitUser, User} from "./user.interface"
-import { StatusCodes } from "http-status-codes"
-import * as database from "./user.database"
+import express, { Request, Response } from "express";
+import { UnitUser, User } from "./user.interface";
+import * as database from "./user.database";
+import { StatusCodes } from "http-status-codes";
 
 export const userRouter = express.Router();
 
-userRouter.get("/users", async (req : Request, res : Response) => {
+userRouter.get("/users", async (req: Request, res: Response) => {
     try {
-        const allUser : UnitUser[] = await database.findAll()
-
-        if (!allUser) {
-            return res.status(StatusCodes.NOT_FOUND).json({msg : `No users at this time..`})
+        const users : UnitUser[] = await database.findAll();
+        if (!users.length) {
+            res.status(StatusCodes.NOT_FOUND).json({ message: "No users found" });
+            return;
         }
-
-        return res.status(StatusCodes.OK).json({total_user : allUser.length, allUser})
+        res.status(StatusCodes.OK).json({ total: users.length, users });
     } catch (error) {
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error})
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
     }
-})
+});
 
-userRouter.get("/users/:id", async (req : Request, res : Response) => {
+userRouter.get("/user/:id", async (req: Request, res: Response) => {
     try {
-        const user : UnitUser = await database.findOne(req.params.id)
+        const user : UnitUser | null = await database.findOne(req.params.id);
+        if (!user) {
+            res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
+            return;
+        }
+        res.status(StatusCodes.OK).json(user);
+    } catch (error) {
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
+    }
+});
 
-        if(!user) {
-            return res.status(StatusCodes.NOT_FOUND).json({error : `User not found!`})
+userRouter.post("/register", async (req: Request, res: Response) => {
+    try {
+
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) {
+            res.status(StatusCodes.BAD_REQUEST).json({ message: "All fields are required" });
+            return;
         }
 
-        return res.status(StatusCodes.OK).json({user})
-    } catch(error) { 
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error})
-    }
-})
-
-userRouter.post("/register", async (req : Request, res : Response) => {
-    try {
-        const { username, email, password } = req.body
-
-    if(!username || !email || !password) {
-        return res.status(StatusCodes.BAD_REQUEST).json({error : `Please provide all the required parameters...`})
-    }
-
-    const user = await database.findByEmail(email)
-
-    if (user) {
-        return res.status(StatusCodes.BAD_REQUEST).json({error : `This email has already been registered...`})
-    }
-
-    const newUser = await database.create(req.body)
-
-    return res.status(StatusCodes.CREATED).json(newUser)
-
-    }catch (error) {
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error})
-    }
-})
-
-userRouter.post("/login", async (req : Request, res : Response) => {
-    try {
-        const {email, password} = req.body
-        
-        if (!email || !password ) { 
-            return res.status(StatusCodes.BAD_REQUEST).json({error : "Please provide all the required parameters..."})
+        if (await database.findByEmail(email)) {
+            res.status(StatusCodes.BAD_REQUEST).json({ message: "Email already in use" });
+            return;
         }
 
-        const user = await database.findByEmail(email)
+        const user = await database.create({ username, email, password });
 
         if (!user) {
-            return res.status(StatusCodes.NOT_FOUND).json({error : "No user exists with the email provided..."})
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Failed to create user" });
+            return;
         }
 
-        const comparePassword = await  database.comparePassword(email, password)
-
-        if (!comparePassword) {
-            return res.status(StatusCodes.BAD_REQUEST).json({error : `incorrect Password!`})
-        }
-
-        return res.status(StatusCodes.OK).json({user})
-        
+        res.status(StatusCodes.CREATED).json(user);
     } catch (error) {
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error})
+        console.error("Error:", error);
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+            message: "Server error", 
+            error: error instanceof Error ? error.message : JSON.stringify(error) 
+        });
     }
-})
+});
 
-userRouter.put("/users/:id", async (req : Request, res : Response) => {
+userRouter.post("/login", async (req: Request, res: Response) => {
     try {
-
-        const {username, email, password} = req.body
-        
-        const getUser = await database.findOne(req.params.id)
-       
-        if(!username || !email || !password) {
-            return res.status(401).json({error : `Please provide all the required parameters...`})
+        const { email, password } = req.body;
+        if (!email || !password) {
+            res.status(StatusCodes.BAD_REQUEST).json({ message: "All fields are required" });
+            return;
         }
 
-        if(!getUser) {
-            return res.status(404).json({error : `No user with id ${req.params.id}`})
-        }
-
-        const updateUser = await database.update((req.params.id), req.body)
-
-        return res.status(201).json({updateUser})
-
-    } catch(error) { 
-        return res.status(500).json({error})
-    }
-})
-
-userRouter.delete("/users/:id", async (req : Request, res : Response) => {
-    try { 
-        const id = (req.params.id)
-
-        const user = await database.findOne(id)
-
+        const user = await database.comparePassword(email, password);
         if (!user) {
-            return res.status(StatusCodes.NOT_FOUND).json({error : `User does not exists`})
+            res.status(StatusCodes.UNAUTHORIZED).json({ message: "Invalid credentials. The user needs to enter the username and password again for authentication." });
+            return;
         }
 
-        await database.remove(id)
-
-        return res.status(StatusCodes.OK).json({msg : "User deleted"})
+        res.status(StatusCodes.OK).json(user);
     } catch (error) {
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({error})
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
     }
+});
 
-})
+userRouter.put("/user/:id", async (req: Request, res: Response) => {
+    try {
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) {
+            res.status(StatusCodes.BAD_REQUEST).json({ message: "All fields are required" });
+            return;
+        }
 
+        const user = await database.findOne(req.params.id);
+        if (!user) {
+            res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
+            return;
+        }
 
+        const updatedUser = await database.update(req.params.id, req.body);
+        res.status(StatusCodes.OK).json(updatedUser);
+    } catch (error) {
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
+    }
+});
 
+userRouter.delete("/user/:id", async (req: Request, res: Response) => {
+    try {
+        const user = await database.findOne(req.params.id);
+        if (!user) {
+            res.status(StatusCodes.NOT_FOUND).json({ message: "User not found" });
+            return;
+        }
 
+        await database.remove(req.params.id);
+        res.status(StatusCodes.OK).json({ message: "User deleted" });
+    } catch (error) {
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: "Server error", error });
+    }
+});
